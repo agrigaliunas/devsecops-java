@@ -80,11 +80,19 @@ jobs:
           java-version: '11'
           cache: 'maven'
 
-      - name: Start PayCore app (Spring Boot) in background
+      - name: Start PayCore app (Spring Boot) in background with CI profile
         run: |
-          mvn -q -DskipTests spring-boot:run &
+          mvn -q -DskipTests spring-boot:run -Dspring-boot.run.profiles=ci &
           echo "Waiting for application to start..."
-          sleep 40
+          # Esperar hasta 60s, probando cada 5s
+          for i in {1..12}; do
+            if curl -sSf http://localhost:8080/ > /dev/null 2>&1; then
+              echo "App is up!"
+              break
+            fi
+            echo "Waiting... ($i)"
+            sleep 5
+          done
 
       - name: ZAP Baseline Scan
         uses: zaproxy/action-baseline@v0.15.0
