@@ -82,7 +82,7 @@ jobs:
 
       - name: Start PayCore app (Spring Boot) in background with CI profile
         run: |
-          mvn -q -DskipTests -Pci-dast spring-boot:run -Dspring-boot.run.profiles=ci &
+          mvn -q -DskipTests spring-boot:run -Dspring-boot.run.profiles=ci &
           echo "Waiting for application to start..."
           for i in {1..12}; do
             if curl -sSf http://localhost:8080/ > /dev/null 2>&1; then
