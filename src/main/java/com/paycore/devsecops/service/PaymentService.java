@@ -8,10 +8,10 @@ import org.springframework.stereotype.Service;
 
 import javax.sql.DataSource;
 import java.math.BigDecimal;
-import java.security.SecureRandom;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.SQLException;
+import java.util.UUID;
 
 @Service
 public class PaymentService {
@@ -19,24 +19,29 @@ public class PaymentService {
     private static final Logger log = LoggerFactory.getLogger(PaymentService.class);
 
     private final DataSource dataSource;
-    private final SecureRandom secureRandom = new SecureRandom();
-
     private final String erpBaseUrl;
     private final String erpApiToken;
 
     public PaymentService(DataSource dataSource,
                           @Value("${paycore.erp.base-url}") String erpBaseUrl,
-                          @Value("${paycore.erp.api-token}") String erpApiToken) {
+                          @Value("${paycore.erp.api-token:}") String erpApiToken) {
         this.dataSource = dataSource;
         this.erpBaseUrl = erpBaseUrl;
         this.erpApiToken = erpApiToken;
     }
 
-    public String processPayment(PaymentRequest request, String clientId) {
-        log.info("Processing payment for companyId={}, amount={}, currency={}",
-                clientId, request.getAmount(), request.getCurrency());
+    private String sanitizeForLog(String value) {
+        if (value == null) return null;
+        return value.replaceAll("[\r\n]", "_");
+    }
 
-        String operationId = "OP-" + Math.abs(secureRandom.nextLong());
+    public String processPayment(PaymentRequest request, String clientId) {
+        String safeClientId = sanitizeForLog(clientId);
+
+        log.info("Processing payment for companyId={}, amount={}, currency={}",
+                safeClientId, request.getAmount(), request.getCurrency());
+
+        String operationId = "OP-" + UUID.randomUUID();
 
         String sql = "INSERT INTO payments " +
                 "(operation_id, company_id, payer_name, payer_email, cbu, amount, currency, description) " +
@@ -61,7 +66,7 @@ public class PaymentService {
             log.error("Error executing SQL for operationId={}", operationId, e);
         }
 
-        callErpApi(operationId, request.getAmount(), clientId);
+        callErpApi(operationId, request.getAmount(), safeClientId);
 
         return operationId;
     }
@@ -70,7 +75,7 @@ public class PaymentService {
         String url = erpBaseUrl + "/payments/sync";
 
         log.info("Calling ERP endpoint {} for operationId={}, clientId={}, amount={}",
-                url, operationId, clientId, amount);
+                url, clientId, operationId, amount);
 
     }
 }

@@ -71,7 +71,8 @@ public class PaymentController {
     public ResponseEntity<String> debug(@RequestParam(value = "error", required = false) String error) {
         try {
             if ("fail".equals(error)) {
-                throw new RuntimeException("Forced debug error for testing");
+                log.warn("Forced debug error triggered");
+                return ResponseEntity.status(500).body("Forced debug error");
             }
             return ResponseEntity.ok("Debug OK");
         } catch (Exception e) {
@@ -80,4 +81,5 @@ public class PaymentController {
                     .body("Internal server error");
         }
     }
+
 }
