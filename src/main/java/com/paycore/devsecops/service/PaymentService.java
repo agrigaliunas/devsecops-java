@@ -53,7 +53,6 @@ public class PaymentService {
     }
 
     public String processPayment(PaymentRequest request, String clientId) {
-        // Crear copia defensiva de los datos del request
         String companyId = request.getCompanyId();
         String payerName = request.getPayerName();
         String payerEmail = request.getPayerEmail();
@@ -62,7 +61,6 @@ public class PaymentService {
         String currency = request.getCurrency();
         String description = request.getDescription();
 
-        // Sanitizar TODOS los valores para logs
         String safeClientId = sanitizeForLog(clientId);
         String safeCompanyId = sanitizeForLog(companyId);
         String safeAmount = sanitizeObjectForLog(amount);
