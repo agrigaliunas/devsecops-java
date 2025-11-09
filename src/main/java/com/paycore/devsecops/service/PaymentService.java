@@ -23,24 +23,36 @@ public class PaymentService {
     private final String erpApiToken;
 
     public PaymentService(DataSource dataSource,
-                           @Value("${paycore.erp.base-url}") String erpBaseUrl,
-                           @Value("${paycore.erp.api-token:ci-fake-token}") String erpApiToken) {
+                          @Value("${paycore.erp.base-url}") String erpBaseUrl,
+                          @Value("${paycore.erp.api-token:ci-fake-token}") String erpApiToken) {
         this.dataSource = dataSource;
         this.erpBaseUrl = erpBaseUrl;
         this.erpApiToken = erpApiToken;
     }
 
-
     private String sanitizeForLog(String value) {
-        if (value == null) return null;
-        return value.replaceAll("[\r\n]", "_");
+        if (value == null) {
+            return "null";
+        }
+        return value.replaceAll("[\\r\\n\\t\\x00-\\x1F\\x7F]", "_");
     }
 
     public String processPayment(PaymentRequest request, String clientId) {
+        // Crear copia defensiva de los datos del request
+        String companyId = request.getCompanyId();
+        String payerName = request.getPayerName();
+        String payerEmail = request.getPayerEmail();
+        String cbu = request.getCbu();
+        BigDecimal amount = request.getAmount();
+        String currency = request.getCurrency();
+        String description = request.getDescription();
+
         String safeClientId = sanitizeForLog(clientId);
+        String safeCompanyId = sanitizeForLog(companyId);
+        String safeCurrency = sanitizeForLog(currency);
 
         log.info("Processing payment for companyId={}, amount={}, currency={}",
-                safeClientId, request.getAmount(), request.getCurrency());
+                safeCompanyId, amount, safeCurrency);
 
         String operationId = "OP-" + UUID.randomUUID();
 
@@ -52,31 +64,34 @@ public class PaymentService {
              PreparedStatement ps = connection.prepareStatement(sql)) {
 
             ps.setString(1, operationId);
-            ps.setString(2, request.getCompanyId());
-            ps.setString(3, request.getPayerName());
-            ps.setString(4, request.getPayerEmail());
-            ps.setString(5, request.getCbu());
-            ps.setBigDecimal(6, request.getAmount());
-            ps.setString(7, request.getCurrency());
-            ps.setString(8, request.getDescription());
+            ps.setString(2, companyId);
+            ps.setString(3, payerName);
+            ps.setString(4, payerEmail);
+            ps.setString(5, cbu);
+            ps.setBigDecimal(6, amount);
+            ps.setString(7, currency);
+            ps.setString(8, description);
 
             int rows = ps.executeUpdate();
-            log.info("Inserted {} row(s) for operationId={}", rows, operationId);
+            String safeOperationId = sanitizeForLog(operationId);
+            log.info("Inserted {} row(s) for operationId={}", rows, safeOperationId);
 
         } catch (SQLException e) {
-            log.error("Error executing SQL for operationId={}", operationId, e);
+            String safeOperationId = sanitizeForLog(operationId);
+            log.error("Error executing SQL for operationId={}", safeOperationId, e);
         }
 
-        callErpApi(operationId, request.getAmount(), safeClientId);
+        callErpApi(operationId, amount, safeClientId);
 
         return operationId;
     }
 
     private void callErpApi(String operationId, BigDecimal amount, String clientId) {
-        String url = erpBaseUrl + "/payments/sync";
+        String safeUrl = sanitizeForLog(erpBaseUrl + "/payments/sync");
+        String safeOperationId = sanitizeForLog(operationId);
+        String safeClientId = sanitizeForLog(clientId);
 
         log.info("Calling ERP endpoint {} for operationId={}, clientId={}, amount={}",
-                url, clientId, operationId, amount);
-
+                safeUrl, safeOperationId, safeClientId, amount);
     }
 }
