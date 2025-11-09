@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<FindBugsFilter>
+    <!--
+        Suprimir warnings SECSC (Spring Controller detection)
+        Estos son warnings informativos que indican que las clases son controladores Spring.
+        No representan vulnerabilidades sino características del framework.
+    -->
+    <Match>
+        <Bug pattern="SECSC" />
+        <Or>
+            <Class name="com.paycore.devsecops.controller.HealthController" />
+            <Class name="com.paycore.devsecops.controller.PaymentController" />
+        </Or>
+    </Match>
+</FindBugsFilter>

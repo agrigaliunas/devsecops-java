@@ -1,78 +1,115 @@
 package com.paycore.devsecops.service;
 
-
 import com.paycore.devsecops.dto.PaymentRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
+import javax.sql.DataSource;
 import java.math.BigDecimal;
 import java.sql.Connection;
-import java.sql.DriverManager;
+import java.sql.PreparedStatement;
 import java.sql.SQLException;
-import java.sql.Statement;
-import java.util.Random;
+import java.util.UUID;
 
-/**
- * ESTA CLASE ESTÁ LLENA DE MALAS PRÁCTICAS A PROPÓSITO.
- * Es ideal para que herramientas SAST/DAST la marquen.
- */
 @Service
 public class PaymentService {
 
     private static final Logger log = LoggerFactory.getLogger(PaymentService.class);
 
-    // MALA PRÁCTICA: secretos hardcodeados en código
-    private static final String DB_URL = "jdbc:mysql://localhost:3306/paycore";
-    private static final String DB_USER = "paycore_user";
-    private static final String DB_PASSWORD = "SuperInsecurePassword123";
+    private final DataSource dataSource;
+    private final String erpBaseUrl;
+    private final String erpApiToken;
 
-    // MALA PRÁCTICA: token de API hardcodeado
-    private static final String ERP_API_TOKEN = "erp-secret-token-very-insecure";
+    @SuppressWarnings("EI_EXPOSE_REP2")
+    public PaymentService(DataSource dataSource,
+                          @Value("${paycore.erp.base-url}") String erpBaseUrl,
+                          @Value("${paycore.erp.api-token:ci-fake-token}") String erpApiToken) {
+        this.dataSource = dataSource;
+        this.erpBaseUrl = erpBaseUrl;
+        this.erpApiToken = erpApiToken;
+    }
 
     /**
-     * Método vulnerabile:
-     * - SQL injection (string concatenation)
-     * - Logging excesivo de datos sensibles
-     * - Uso de java.util.Random para IDs relacionados a operaciones
-     * - Sin uso de HTTPS ni validación de certificados (simulado)
+     * Sanitiza valores para logs, removiendo todos los caracteres de control
+     * incluyendo CRLF para prevenir inyección de logs
      */
-    public String processPaymentInsecure(PaymentRequest request, String clientId) {
-        log.debug("Starting insecure processing for companyId={}, email={}, cbu={}, amount={}",
-                clientId, request.getPayerEmail(), request.getCbu(), request.getAmount());
+    private String sanitizeForLog(String value) {
+        if (value == null) {
+            return "null";
+        }
+        return value.replaceAll("[\\r\\n\\t\\x00-\\x1F\\x7F]", "_");
+    }
 
-        String operationId = "OP-" + new Random().nextInt(999999);
+    /**
+     * Sanitiza objetos para logs (números, etc)
+     */
+    private String sanitizeObjectForLog(Object value) {
+        if (value == null) {
+            return "null";
+        }
+        return sanitizeForLog(value.toString());
+    }
 
-        String sql = "INSERT INTO payments (operation_id, company_id, payer_name, payer_email, cbu, amount, currency, description) " +
-                "VALUES ('" + operationId + "', '" + request.getCompanyId() + "', '" + request.getPayerName() + "', '" +
-                request.getPayerEmail() + "', '" + request.getCbu() + "', " + request.getAmount() + ", '" +
-                request.getCurrency() + "', '" + request.getDescription() + "')";
+    public String processPayment(PaymentRequest request, String clientId) {
+        String companyId = request.getCompanyId();
+        String payerName = request.getPayerName();
+        String payerEmail = request.getPayerEmail();
+        String cbu = request.getCbu();
+        BigDecimal amount = request.getAmount();
+        String currency = request.getCurrency();
+        String description = request.getDescription();
 
-        try (Connection connection = DriverManager.getConnection(DB_URL, DB_USER, DB_PASSWORD);
-             Statement statement = connection.createStatement()) {
+        String safeClientId = sanitizeForLog(clientId);
+        String safeCompanyId = sanitizeForLog(companyId);
+        String safeAmount = sanitizeObjectForLog(amount);
+        String safeCurrency = sanitizeForLog(currency);
 
-            int rows = statement.executeUpdate(sql);
-            log.info("Inserted {} row(s) for operationId={}", rows, operationId);
+        log.info("Processing payment for companyId={}, amount={}, currency={}",
+                safeCompanyId, safeAmount, safeCurrency);
+
+        String operationId = "OP-" + UUID.randomUUID();
+
+        String sql = "INSERT INTO payments " +
+                "(operation_id, company_id, payer_name, payer_email, cbu, amount, currency, description) " +
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
+
+        try (Connection connection = dataSource.getConnection();
+             PreparedStatement ps = connection.prepareStatement(sql)) {
+
+            ps.setString(1, operationId);
+            ps.setString(2, companyId);
+            ps.setString(3, payerName);
+            ps.setString(4, payerEmail);
+            ps.setString(5, cbu);
+            ps.setBigDecimal(6, amount);
+            ps.setString(7, currency);
+            ps.setString(8, description);
+
+            int rows = ps.executeUpdate();
+            String safeOperationId = sanitizeForLog(operationId);
+            String safeRows = sanitizeObjectForLog(rows);
+            log.info("Inserted {} row(s) for operationId={}", safeRows, safeOperationId);
 
         } catch (SQLException e) {
-            log.error("Error executing SQL for operationId=" + operationId + ": " + e.getMessage(), e);
+            String safeOperationId = sanitizeForLog(operationId);
+            String safeErrorMsg = sanitizeForLog(e.getMessage());
+            log.error("Error executing SQL for operationId={}, error={}", safeOperationId, safeErrorMsg);
         }
 
-        callInsecureErpApi(operationId, request.getAmount(), clientId);
+        callErpApi(operationId, amount, safeClientId);
 
         return operationId;
     }
 
-    /**
-     * Simula una llamada HTTP insegura a un ERP corporativo.
-     */
-    private void callInsecureErpApi(String operationId, BigDecimal amount, String clientId) {
-        String url = "http://insecure-erp.fintechinnovate.local/payments/sync?operationId="
-                + operationId + "&amount=" + amount + "&clientId=" + clientId;
+    private void callErpApi(String operationId, BigDecimal amount, String clientId) {
+        String safeUrl = sanitizeForLog(erpBaseUrl + "/payments/sync");
+        String safeOperationId = sanitizeForLog(operationId);
+        String safeClientId = sanitizeForLog(clientId);
+        String safeAmount = sanitizeObjectForLog(amount);
 
-        // MALA PRÁCTICA: incluir token de API en query string
-        url += "&token=" + ERP_API_TOKEN;
-
-        log.warn("Calling insecure ERP endpoint: {}", url);
+        log.info("Calling ERP endpoint {} for operationId={}, clientId={}, amount={}",
+                safeUrl, safeOperationId, safeClientId, safeAmount);
     }
 }

@@ -1,29 +1,117 @@
-name: PayCore CI - Build & Test
+name: PayCore DevSecOps CI
 
 on:
   push:
-    branches: [ "master" ]
+    branches:
+      - master
+      - v17
+      - 'feature/*'
   pull_request:
-    branches: [ "master" ]
+    branches:
+      - master
+      - v17
 
+
+permissions:
+  actions: read
+  contents: read
+  security-events: write   # necesario para OSV-Scanner (sube resultados a Code scanning)
+
+# ======================================
+# 1) Build + Tests + SAST (SpotBugs)
+# ======================================
 jobs:
-  build-and-test:
+  build_and_sast:
     runs-on: ubuntu-latest
-
-    strategy:
-      matrix:
-        java-version: [ '11', '17' ]  # Java 11 (estado actual) y Java 17 (estado objetivo)
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up JDK ${{ matrix.java-version }}
+      - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
-          java-version: ${{ matrix.java-version }}
+          java-version: '17'
           cache: 'maven'
 
-      - name: Build and test with Maven (Java ${{ matrix.java-version }})
+      - name: Build + tests + SAST (mvn verify)
         run: mvn -B clean verify
+
+      - name: Upload SpotBugs report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: spotbugs-report
+          path: |
+            target/spotbugs.html
+            target/spotbugsXml.xml
+          if-no-files-found: warn
+
+  # ======================================
+  # 2) SCA - OSV Scanner (sin NVD, sin API key)
+  # ======================================
+  sca_osv:
+    needs: build_and_sast
+    uses: "google/osv-scanner-action/.github/workflows/osv-scanner-reusable.yml@v2.2.4"
+    with:
+      # Estos son los defaults, los dejo explícitos para el TP
+      scan-args: |-
+        --recursive
+        ./
+      fail-on-vuln: true
+
+  # ======================================
+  # 3) DAST - OWASP ZAP Baseline
+  # ======================================
+  dast_zap:
+    runs-on: ubuntu-latest
+    needs: build_and_sast
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+          cache: 'maven'
+
+      - name: Start PayCore app (Spring Boot, CI profile)
+        run: |
+          # Arrancamos la app en background y guardamos logs en app.log
+          nohup mvn -DskipTests spring-boot:run -Dspring-boot.run.profiles=ci > app.log 2>&1 &
+          APP_PID=$!
+          echo "App PID: $APP_PID"
+
+          # Esperamos hasta 60s a que responda en 8080
+          for i in {1..12}; do
+            if curl -s http://localhost:8080/ > /dev/null 2>&1; then
+              echo "App is up!"
+              exit 0
+            fi
+
+            # Si el proceso murió, mostramos logs y fallamos
+            if ! kill -0 $APP_PID 2>/dev/null; then
+              echo "Spring Boot process died. Dumping app.log:"
+              cat app.log
+              exit 1
+            fi
+
+            echo "Waiting for app... ($i)"
+            sleep 5
+          done
+
+          echo "Timed out waiting for app. Dumping app.log:"
+          cat app.log
+          exit 1
+
+      - name: ZAP Baseline Scan
+        uses: zaproxy/action-baseline@v0.15.0
+        with:
+          target: 'http://localhost:8080'
+          allow_issue_writing: false
+          fail_action: false   # si querés que aunque ZAP falle no rompa el pipeline
+
