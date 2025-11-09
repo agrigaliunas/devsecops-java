@@ -17,6 +17,7 @@
         <maven.compiler.source>11</maven.compiler.source>
         <maven.compiler.target>11</maven.compiler.target>
         <spring.boot.version>2.3.0.RELEASE</spring.boot.version>
+        <jackson.databind.version>2.9.10</jackson.databind.version>
     </properties>
 
     <dependencies>
@@ -45,7 +46,7 @@
         <dependency>
             <groupId>com.fasterxml.jackson.core</groupId>
             <artifactId>jackson-databind</artifactId>
-            <version>2.9.10</version>
+            <version>${jackson.databind.version}</version>
         </dependency>
 
         <!-- Log4j2 en versión vulnerable a Log4Shell (CVE-2021-44228) :contentReference[oaicite:0]{index=0} -->
@@ -104,4 +105,13 @@
             </plugin>
         </plugins>
     </build>
+    <profiles>
+        <profile>
+            <id>ci-dast</id>
+            <properties>
+                <!-- Para levantar la app en CI/ZAP usamos una versión compatible con Spring Boot -->
+                <jackson.databind.version>2.11.0</jackson.databind.version>
+            </properties>
+        </profile>
+    </profiles>
 </project>
