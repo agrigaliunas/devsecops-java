@@ -23,12 +23,13 @@ public class PaymentService {
     private final String erpApiToken;
 
     public PaymentService(DataSource dataSource,
-                          @Value("${paycore.erp.base-url}") String erpBaseUrl,
-                          @Value("${paycore.erp.api-token:}") String erpApiToken) {
+                           @Value("${paycore.erp.base-url}") String erpBaseUrl,
+                           @Value("${paycore.erp.api-token:ci-fake-token}") String erpApiToken) {
         this.dataSource = dataSource;
         this.erpBaseUrl = erpBaseUrl;
         this.erpApiToken = erpApiToken;
     }
+
 
     private String sanitizeForLog(String value) {
         if (value == null) return null;
