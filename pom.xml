@@ -13,10 +13,12 @@
     <description>Demo insegura para DevSecOps - Migración Java 11 a 17</description>
 
     <properties>
-        <java.version>11</java.version>
-        <maven.compiler.source>11</maven.compiler.source>
-        <maven.compiler.target>11</maven.compiler.target>
+        <java.version>17</java.version>
+        <maven.compiler.source>17</maven.compiler.source>
+        <maven.compiler.target>17</maven.compiler.target>
         <spring.boot.version>2.3.0.RELEASE</spring.boot.version>
+        <spotbugs.version>4.8.3.0</spotbugs.version>
+        <dependency-check.version>9.0.9</dependency-check.version>
     </properties>
 
     <dependencies>
@@ -66,11 +68,44 @@
 
     <build>
         <plugins>
+            <!-- Plugin de compilación apuntando a Java 17 -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <version>3.11.0</version>
+                <configuration>
+                    <release>${java.version}</release>
+                </configuration>
+            </plugin>
+
             <!-- Plugin de Spring Boot para poder ejecutar con mvn spring-boot:run -->
             <plugin>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
                 <version>${spring.boot.version}</version>
+            </plugin>
+
+            <!-- SAST: generación de reporte con SpotBugs -->
+            <plugin>
+                <groupId>com.github.spotbugs</groupId>
+                <artifactId>spotbugs-maven-plugin</artifactId>
+                <version>${spotbugs.version}</version>
+                <configuration>
+                    <xmlOutput>true</xmlOutput>
+                    <failOnError>false</failOnError>
+                </configuration>
+            </plugin>
+
+            <!-- SCA: análisis de dependencias con OWASP Dependency-Check -->
+            <plugin>
+                <groupId>org.owasp</groupId>
+                <artifactId>dependency-check-maven</artifactId>
+                <version>${dependency-check.version}</version>
+                <configuration>
+                    <format>ALL</format>
+                    <failOnError>false</failOnError>
+                    <failBuildOnCVSS>11</failBuildOnCVSS>
+                </configuration>
             </plugin>
         </plugins>
     </build>
