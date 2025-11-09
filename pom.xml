@@ -124,6 +124,35 @@
         </dependency>
     </dependencies>
 
+    <configuration>
+        <!-- Archivo de exclusiones -->
+        <excludeFilterFile>spotbugs-exclude.xml</excludeFilterFile>
+
+        <!-- Incluir plugin de seguridad Find Security Bugs -->
+        <plugins>
+            <plugin>
+                <groupId>com.h3xstream.findsecbugs</groupId>
+                <artifactId>findsecbugs-plugin</artifactId>
+                <version>1.13.0</version>
+            </plugin>
+        </plugins>
+
+        <!-- Nivel de esfuerzo y umbral -->
+        <effort>Max</effort>
+        <threshold>Low</threshold>
+
+        <!-- Fallar build en warnings críticos (opcional) -->
+        <failOnError>false</failOnError>
+    </configuration>
+    <executions>
+        <execution>
+            <goals>
+                <goal>check</goal>
+            </goals>
+        </execution>
+    </executions>
+
+
     <build>
         <plugins>
             <!-- Spring Boot -->

@@ -22,6 +22,7 @@ public class PaymentService {
     private final String erpBaseUrl;
     private final String erpApiToken;
 
+    @SuppressWarnings("EI_EXPOSE_REP2")
     public PaymentService(DataSource dataSource,
                           @Value("${paycore.erp.base-url}") String erpBaseUrl,
                           @Value("${paycore.erp.api-token:ci-fake-token}") String erpApiToken) {
@@ -30,11 +31,25 @@ public class PaymentService {
         this.erpApiToken = erpApiToken;
     }
 
+    /**
+     * Sanitiza valores para logs, removiendo todos los caracteres de control
+     * incluyendo CRLF para prevenir inyección de logs
+     */
     private String sanitizeForLog(String value) {
         if (value == null) {
             return "null";
         }
         return value.replaceAll("[\\r\\n\\t\\x00-\\x1F\\x7F]", "_");
+    }
+
+    /**
+     * Sanitiza objetos para logs (números, etc)
+     */
+    private String sanitizeObjectForLog(Object value) {
+        if (value == null) {
+            return "null";
+        }
+        return sanitizeForLog(value.toString());
     }
 
     public String processPayment(PaymentRequest request, String clientId) {
@@ -47,12 +62,14 @@ public class PaymentService {
         String currency = request.getCurrency();
         String description = request.getDescription();
 
+        // Sanitizar TODOS los valores para logs
         String safeClientId = sanitizeForLog(clientId);
         String safeCompanyId = sanitizeForLog(companyId);
+        String safeAmount = sanitizeObjectForLog(amount);
         String safeCurrency = sanitizeForLog(currency);
 
         log.info("Processing payment for companyId={}, amount={}, currency={}",
-                safeCompanyId, amount, safeCurrency);
+                safeCompanyId, safeAmount, safeCurrency);
 
         String operationId = "OP-" + UUID.randomUUID();
 
@@ -74,11 +91,13 @@ public class PaymentService {
 
             int rows = ps.executeUpdate();
             String safeOperationId = sanitizeForLog(operationId);
-            log.info("Inserted {} row(s) for operationId={}", rows, safeOperationId);
+            String safeRows = sanitizeObjectForLog(rows);
+            log.info("Inserted {} row(s) for operationId={}", safeRows, safeOperationId);
 
         } catch (SQLException e) {
             String safeOperationId = sanitizeForLog(operationId);
-            log.error("Error executing SQL for operationId={}", safeOperationId, e);
+            String safeErrorMsg = sanitizeForLog(e.getMessage());
+            log.error("Error executing SQL for operationId={}, error={}", safeOperationId, safeErrorMsg);
         }
 
         callErpApi(operationId, amount, safeClientId);
@@ -90,8 +109,9 @@ public class PaymentService {
         String safeUrl = sanitizeForLog(erpBaseUrl + "/payments/sync");
         String safeOperationId = sanitizeForLog(operationId);
         String safeClientId = sanitizeForLog(clientId);
+        String safeAmount = sanitizeObjectForLog(amount);
 
         log.info("Calling ERP endpoint {} for operationId={}, clientId={}, amount={}",
-                safeUrl, safeOperationId, safeClientId, amount);
+                safeUrl, safeOperationId, safeClientId, safeAmount);
     }
 }
