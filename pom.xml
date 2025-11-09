@@ -122,36 +122,15 @@
             <version>2.10.0</version>
             <scope>test</scope>
         </dependency>
+
+        <!-- Dependencia para anotaciones de SpotBugs -->
+        <dependency>
+            <groupId>com.github.spotbugs</groupId>
+            <artifactId>spotbugs-annotations</artifactId>
+            <version>4.8.3</version>
+            <scope>provided</scope>
+        </dependency>
     </dependencies>
-
-    <configuration>
-        <!-- Archivo de exclusiones -->
-        <excludeFilterFile>spotbugs-exclude.xml</excludeFilterFile>
-
-        <!-- Incluir plugin de seguridad Find Security Bugs -->
-        <plugins>
-            <plugin>
-                <groupId>com.h3xstream.findsecbugs</groupId>
-                <artifactId>findsecbugs-plugin</artifactId>
-                <version>1.13.0</version>
-            </plugin>
-        </plugins>
-
-        <!-- Nivel de esfuerzo y umbral -->
-        <effort>Max</effort>
-        <threshold>Low</threshold>
-
-        <!-- Fallar build en warnings críticos (opcional) -->
-        <failOnError>false</failOnError>
-    </configuration>
-    <executions>
-        <execution>
-            <goals>
-                <goal>check</goal>
-            </goals>
-        </execution>
-    </executions>
-
 
     <build>
         <plugins>
@@ -168,18 +147,29 @@
                 <artifactId>spotbugs-maven-plugin</artifactId>
                 <version>4.9.8.1</version>
                 <configuration>
+                    <!-- Archivo de exclusiones -->
+                    <excludeFilterFile>spotbugs-exclude.xml</excludeFilterFile>
+
+                    <!-- Nivel de esfuerzo y umbral -->
                     <effort>Max</effort>
                     <threshold>Low</threshold>
+
+                    <!-- Formatos de salida -->
                     <xmlOutput>true</xmlOutput>
                     <htmlOutput>true</htmlOutput>
                     <outputDirectory>${project.build.directory}</outputDirectory>
+
+                    <!-- Plugin de seguridad Find Security Bugs -->
                     <plugins>
                         <plugin>
                             <groupId>com.h3xstream.findsecbugs</groupId>
                             <artifactId>findsecbugs-plugin</artifactId>
-                            <version>1.12.0</version>
+                            <version>1.13.0</version>
                         </plugin>
                     </plugins>
+
+                    <!-- Fallar build en warnings críticos (opcional) -->
+                    <failOnError>false</failOnError>
                 </configuration>
                 <executions>
                     <execution>
