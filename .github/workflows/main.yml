@@ -79,21 +79,39 @@ jobs:
           java-version: '17'
           cache: 'maven'
 
-      - name: Start PayCore app (Spring Boot) in background with CI profile
+      - name: Start PayCore app (Spring Boot, CI profile)
         run: |
-          mvn -q -DskipTests spring-boot:run -Dspring-boot.run.profiles=ci &
-          echo "Waiting for application to start..."
+          # Arrancamos la app en background y guardamos logs en app.log
+          nohup mvn -DskipTests spring-boot:run -Dspring-boot.run.profiles=ci > app.log 2>&1 &
+          APP_PID=$!
+          echo "App PID: $APP_PID"
+
+          # Esperamos hasta 60s a que responda en 8080
           for i in {1..12}; do
             if curl -s http://localhost:8080/ > /dev/null 2>&1; then
               echo "App is up!"
-              break
+              exit 0
             fi
-            echo "Waiting... ($i)"
+
+            # Si el proceso murió, mostramos logs y fallamos
+            if ! kill -0 $APP_PID 2>/dev/null; then
+              echo "Spring Boot process died. Dumping app.log:"
+              cat app.log
+              exit 1
+            fi
+
+            echo "Waiting for app... ($i)"
             sleep 5
           done
+
+          echo "Timed out waiting for app. Dumping app.log:"
+          cat app.log
+          exit 1
 
       - name: ZAP Baseline Scan
         uses: zaproxy/action-baseline@v0.15.0
         with:
           target: 'http://localhost:8080'
           allow_issue_writing: false
+          fail_action: false   # si querés que aunque ZAP falle no rompa el pipeline
+
